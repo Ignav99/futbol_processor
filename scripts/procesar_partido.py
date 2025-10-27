@@ -27,26 +27,80 @@ class PartidoProcessor:
         self.ball_pos_smoothed = None
         self.smoothing_factor = 0.15
         
+    def verificar_configuracion(self):
+        """
+        Verifica que todos los archivos de configuración existan
+        """
+        archivos_necesarios = {
+            "calibracion_cam_izq.npz": "Calibración cámara izquierda",
+            "calibracion_cam_der.npz": "Calibración cámara derecha",
+            "matriz_homografia.npy": "Homografía",
+            "drive_token.pickle": "Token Google Drive",
+            "drive_folder_id.txt": "ID carpeta Drive"
+        }
+
+        faltantes = []
+        for archivo, descripcion in archivos_necesarios.items():
+            if not (self.config_folder / archivo).exists():
+                faltantes.append((archivo, descripcion))
+
+        if faltantes:
+            print("\n" + "="*60)
+            print("ERROR: CONFIGURACIÓN INCOMPLETA")
+            print("="*60)
+            print("\nFaltan los siguientes archivos de configuración:\n")
+            for archivo, descripcion in faltantes:
+                print(f"  ✗ {descripcion} ({archivo})")
+
+            print("\n" + "="*60)
+            print("PASOS NECESARIOS:")
+            print("="*60)
+
+            if any("calibracion" in f[0] for f in faltantes):
+                print("\n1. CALIBRAR CÁMARAS:")
+                print("   source futbol_processor_env/bin/activate")
+                print("   python3 scripts/calibrar_camaras.py")
+
+            if any("homografia" in f[0] for f in faltantes):
+                print("\n2. CONFIGURAR HOMOGRAFÍA:")
+                print("   python3 scripts/configurar_homografia.py")
+
+            if any("drive" in f[0] for f in faltantes):
+                print("\n3. CONFIGURAR GOOGLE DRIVE:")
+                print("   python3 scripts/configurar_drive.py")
+
+            print("\n" + "="*60)
+            print("Consulta la documentación: docs/LEEME.md")
+            print("="*60 + "\n")
+            return False
+
+        return True
+
     def cargar_configuraciones(self):
+        print("Verificando configuración...")
+
+        if not self.verificar_configuracion():
+            raise FileNotFoundError("Configuración incompleta. Sigue los pasos indicados arriba.")
+
         print("Cargando configuraciones...")
-        
+
         cal_izq = np.load(self.config_folder / "calibracion_cam_izq.npz")
         cal_der = np.load(self.config_folder / "calibracion_cam_der.npz")
-        
+
         self.camera_matrix_left = cal_izq['camera_matrix']
         self.dist_coeffs_left = cal_izq['dist_coeffs']
         self.camera_matrix_right = cal_der['camera_matrix']
         self.dist_coeffs_right = cal_der['dist_coeffs']
-        
+
         self.homography = np.load(self.config_folder / "matriz_homografia.npy")
-        
+
         with open(self.config_folder / "drive_token.pickle", 'rb') as token:
             self.drive_creds = pickle.load(token)
-        
+
         with open(self.config_folder / "drive_folder_id.txt", 'r') as f:
             self.drive_folder_id = f.read().strip()
 
-        print("Configuraciones cargadas")
+        print("Configuraciones cargadas correctamente\n")
 
     def concatenar_videos(self, carpeta_videos):
         """
