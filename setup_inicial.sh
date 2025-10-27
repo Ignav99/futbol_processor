@@ -44,10 +44,13 @@ else
     echo "ffmpeg detectado"
 fi
 
+# Obtener directorio del script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Crear entorno virtual
 echo ""
 echo "Creando entorno virtual Python..."
-cd ~/futbol_processor
+cd "$SCRIPT_DIR"
 
 if [ -d "futbol_processor_env" ]; then
     echo "El entorno virtual ya existe. Eliminando..."
