@@ -11,6 +11,8 @@ import time
 from datetime import datetime
 import subprocess
 import tempfile
+import os
+import glob
 
 class PartidoProcessor:
     def __init__(self):
@@ -43,38 +45,135 @@ class PartidoProcessor:
         
         with open(self.config_folder / "drive_folder_id.txt", 'r') as f:
             self.drive_folder_id = f.read().strip()
-        
+
         print("Configuraciones cargadas")
+
+    def concatenar_videos(self, carpeta_videos):
+        """
+        Concatena múltiples archivos de video de una carpeta en orden cronológico
+        """
+        print(f"\nBuscando videos en: {carpeta_videos}")
+
+        # Buscar todos los archivos de video
+        extensiones = ['*.MP4', '*.mp4', '*.MOV', '*.mov']
+        archivos = []
+        for ext in extensiones:
+            archivos.extend(glob.glob(os.path.join(carpeta_videos, ext)))
+
+        if not archivos:
+            print(f"ERROR: No se encontraron videos en {carpeta_videos}")
+            return None
+
+        # Ordenar por fecha de creación
+        archivos.sort(key=os.path.getmtime)
+
+        print(f"Encontrados {len(archivos)} archivo(s):")
+        for i, archivo in enumerate(archivos, 1):
+            nombre = os.path.basename(archivo)
+            print(f"  {i}. {nombre}")
+
+        # Si solo hay un archivo, devolverlo directamente
+        if len(archivos) == 1:
+            print("Un solo archivo, no es necesario concatenar")
+            return archivos[0]
+
+        # Concatenar múltiples archivos
+        print(f"\nConcatenando {len(archivos)} archivos...")
+
+        output_dir = Path.home() / "futbol_output"
+        output_dir.mkdir(exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        carpeta_nombre = os.path.basename(carpeta_videos)
+        output_file = output_dir / f"concatenado_{carpeta_nombre}_{timestamp}.mp4"
+
+        # Crear archivo de lista para ffmpeg
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            for archivo in archivos:
+                # Escapar comillas simples en la ruta
+                ruta_escapada = archivo.replace("'", "'\\''")
+                f.write(f"file '{ruta_escapada}'\n")
+            lista_path = f.name
+
+        try:
+            # Concatenar usando ffmpeg
+            cmd = [
+                'ffmpeg', '-f', 'concat', '-safe', '0',
+                '-i', lista_path,
+                '-c', 'copy',
+                str(output_file), '-y'
+            ]
+
+            resultado = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
+            if resultado.returncode != 0:
+                print(f"ERROR en concatenación: {resultado.stderr}")
+                return None
+
+            print(f"Videos concatenados exitosamente: {output_file}")
+            return str(output_file)
+
+        finally:
+            # Limpiar archivo temporal
+            if os.path.exists(lista_path):
+                os.remove(lista_path)
     
     def sincronizar_videos(self, video1_path, video2_path):
+        """
+        Sincroniza dos videos usando correlación de audio.
+        Ideal para detectar palmadas o sonidos fuertes al inicio.
+        """
         print("\nSincronizando videos por audio...")
-        
+        print("(Buscando palmada u otro sonido de sincronización)")
+
         with tempfile.TemporaryDirectory() as tmpdir:
             audio1 = Path(tmpdir) / "audio1.wav"
             audio2 = Path(tmpdir) / "audio2.wav"
-            
-            subprocess.run(['ffmpeg', '-i', str(video1_path), '-vn', '-acodec', 'pcm_s16le', 
-                          '-ar', '44100', '-ac', '1', str(audio1), '-y'], 
+
+            print("Extrayendo audio del video izquierdo...")
+            subprocess.run(['ffmpeg', '-i', str(video1_path), '-vn', '-acodec', 'pcm_s16le',
+                          '-ar', '44100', '-ac', '1', str(audio1), '-y'],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(['ffmpeg', '-i', str(video2_path), '-vn', '-acodec', 'pcm_s16le', 
+
+            print("Extrayendo audio del video derecho...")
+            subprocess.run(['ffmpeg', '-i', str(video2_path), '-vn', '-acodec', 'pcm_s16le',
                           '-ar', '44100', '-ac', '1', str(audio2), '-y'],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
+
             rate1, data1 = wavfile.read(audio1)
             rate2, data2 = wavfile.read(audio2)
-            
+
+            # Convertir a mono si es estéreo
             if len(data1.shape) > 1:
                 data1 = data1.mean(axis=1)
             if len(data2.shape) > 1:
                 data2 = data2.mean(axis=1)
-            
-            correlation = correlate(data1, data2, mode='full')
-            lag = np.argmax(correlation) - len(data2) + 1
-            
+
+            # Normalizar los datos
+            data1 = data1.astype(np.float64)
+            data2 = data2.astype(np.float64)
+
+            # Usar solo los primeros 60 segundos para sincronización (más rápido)
+            max_samples = min(len(data1), len(data2), rate1 * 60)
+            data1_short = data1[:max_samples]
+            data2_short = data2[:max_samples]
+
+            print("Calculando correlación cruzada...")
+            correlation = correlate(data1_short, data2_short, mode='full')
+            lag = np.argmax(correlation) - len(data2_short) + 1
+
             fps = 30
             offset_frames = int(lag * fps / rate1)
-            
-            print(f"Offset detectado: {offset_frames} frames")
+            offset_seconds = lag / rate1
+
+            print(f"Sincronización detectada:")
+            print(f"  Offset: {offset_frames} frames ({offset_seconds:.2f} segundos)")
+
             return offset_frames
     
     def detectar_balon(self, frame):
@@ -178,13 +277,31 @@ class PartidoProcessor:
             print(f"Error al subir: {str(e)}")
             return False
     
-    def procesar_partido(self, video_izq_path, video_der_path):
+    def procesar_partido(self, carpeta_izq, carpeta_der):
+        """
+        Procesa un partido completo desde carpetas de videos.
+        Concatena automáticamente múltiples archivos si es necesario.
+        """
         print("\n" + "="*60)
         print("PROCESANDO PARTIDO")
         print("="*60)
-        
+
         inicio = time.time()
-        
+
+        # Concatenar videos de cada cámara si hay múltiples archivos
+        print("\n--- PROCESANDO CAMARA IZQUIERDA ---")
+        video_izq_path = self.concatenar_videos(carpeta_izq)
+        if not video_izq_path:
+            print("ERROR: No se pudo procesar la cámara izquierda")
+            return
+
+        print("\n--- PROCESANDO CAMARA DERECHA ---")
+        video_der_path = self.concatenar_videos(carpeta_der)
+        if not video_der_path:
+            print("ERROR: No se pudo procesar la cámara derecha")
+            return
+
+        # Sincronizar videos
         offset = self.sincronizar_videos(video_izq_path, video_der_path)
         
         print("\nAbriendo videos...")
@@ -306,22 +423,44 @@ class PartidoProcessor:
         print("\n" + "="*60)
         print("PROCESADOR DE PARTIDOS")
         print("="*60)
-        
-        print("\nConecta las tarjetas SD y copia los videos a tu Mac\n")
-        
-        video_izq = input("Ruta del video IZQUIERDO: ").strip()
-        video_der = input("Ruta del video DERECHO: ").strip()
-        
-        if not Path(video_izq).exists() or not Path(video_der).exists():
-            print("Uno o ambos archivos no existen")
+
+        print("\nEste script procesará automáticamente los videos de las carpetas:")
+        print("  - Cámara izquierda: ~/Desktop/raw_video_left")
+        print("  - Cámara derecha: ~/Desktop/raw_video_right")
+        print("\nSi tienes múltiples archivos (partido en partes), se concatenarán automáticamente.")
+        print("TIP: Da una palmada al inicio para mejor sincronización\n")
+
+        # Rutas por defecto
+        carpeta_izq = str(Path.home() / "Desktop" / "raw_video_left")
+        carpeta_der = str(Path.home() / "Desktop" / "raw_video_right")
+
+        # Permitir rutas personalizadas
+        usar_default = input("¿Usar carpetas por defecto? (s/n): ").strip().lower()
+
+        if usar_default != 's':
+            carpeta_izq = input("Ruta carpeta IZQUIERDA: ").strip()
+            carpeta_der = input("Ruta carpeta DERECHA: ").strip()
+
+        # Verificar que las carpetas existen
+        if not Path(carpeta_izq).exists():
+            print(f"ERROR: Carpeta no existe: {carpeta_izq}")
             return
-        
-        confirmar = input(f"\nProcesar estos videos? (s/n): ").strip().lower()
-        
+
+        if not Path(carpeta_der).exists():
+            print(f"ERROR: Carpeta no existe: {carpeta_der}")
+            return
+
+        # Mostrar resumen
+        print(f"\nCarpetas a procesar:")
+        print(f"  Izquierda: {carpeta_izq}")
+        print(f"  Derecha: {carpeta_der}")
+
+        confirmar = input(f"\n¿Procesar partido? (s/n): ").strip().lower()
+
         if confirmar == 's':
-            self.procesar_partido(video_izq, video_der)
+            self.procesar_partido(carpeta_izq, carpeta_der)
         else:
-            print("Operacion cancelada")
+            print("Operación cancelada")
 
 if __name__ == "__main__":
     processor = PartidoProcessor()

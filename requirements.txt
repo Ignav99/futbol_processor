@@ -1,0 +1,14 @@
+# Computer Vision y procesamiento de imagen
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Procesamiento de señales y audio
+scipy>=1.11.0
+
+# Procesamiento de video
+moviepy>=1.0.3
+
+# Google Drive API
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.1.1
+google-auth-oauthlib>=1.1.0
