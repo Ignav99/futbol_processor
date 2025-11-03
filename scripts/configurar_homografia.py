@@ -107,19 +107,46 @@ class HomographyConfigurator:
                        (x + 15, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
             cv2.imshow(self.window_name, self.current_image)
     
-    def seleccionar_puntos(self, image, title, side):
+    def seleccionar_puntos(self, image, title, side, instrucciones_puntos):
         self.current_image = image.copy()
         self.window_name = title
-        
+
+        # Crear ventana y maximizarla
         cv2.namedWindow(title, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(title, 1280, 720)
+
+        # Obtener tamaño de la imagen original
+        h, w = image.shape[:2]
+
+        # Usar 90% del tamaño de pantalla (asumiendo 1920x1080 o mayor)
+        # Si la imagen es muy grande, escalarla pero sin perder mucho detalle
+        max_width = 1800
+        max_height = 1000
+
+        if w > max_width or h > max_height:
+            scale = min(max_width / w, max_height / h)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            cv2.resizeWindow(title, new_w, new_h)
+        else:
+            # Usar tamaño original si cabe
+            cv2.resizeWindow(title, w, h)
+
         cv2.setMouseCallback(title, self.mouse_callback, side)
         cv2.imshow(title, self.current_image)
-        
-        print(f"\nHaz clic en {title}")
-        print("Presiona 'q' cuando hayas seleccionado todos los puntos")
-        print("Presiona 'r' para reiniciar")
-        
+
+        print(f"\n{'='*60}")
+        print(f"SELECCIONANDO PUNTOS: {title}")
+        print(f"{'='*60}")
+        print("\nSELECCIONA LOS SIGUIENTES 6 PUNTOS EN ESTE ORDEN:")
+        for i, punto in enumerate(instrucciones_puntos, 1):
+            print(f"  {i}. {punto}")
+        print(f"\n{'='*60}")
+        print("CONTROLES:")
+        print("  - Click izquierdo: Marcar punto")
+        print("  - 'r': Reiniciar (borrar todos los puntos)")
+        print("  - 'q': Continuar (cuando tengas los 6 puntos)")
+        print(f"{'='*60}\n")
+
         while True:
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
@@ -131,7 +158,7 @@ class HomographyConfigurator:
                     self.points_right = []
                 self.current_image = image.copy()
                 cv2.imshow(title, self.current_image)
-                print("Puntos reiniciados")
+                print("\n✗ Puntos reiniciados. Empieza de nuevo desde el punto 1.\n")
         
         cv2.destroyAllWindows()
     
@@ -141,20 +168,29 @@ class HomographyConfigurator:
         print("="*60)
         
         print("""
-INSTRUCCIONES:
-1. Vas a ver dos imagenes: izquierda y derecha
-2. Debes hacer clic en 4-6 PUNTOS CORRESPONDIENTES en ambas imagenes
-3. Buenos puntos de referencia:
-   - Esquinas del area
-   - Punto de penalti
-   - Esquinas del campo
-   - Lineas de esquina
-4. IMPORTANTE: Haz clic en los puntos EN EL MISMO ORDEN en ambas imagenes
+INSTRUCCIONES DE LA HOMOGRAFÍA:
 
-NOTA: Puedes pasar:
+La homografía permite unir perfectamente las dos imágenes de las cámaras.
+
+¿QUÉ VAS A HACER?
+- Verás dos imágenes: izquierda y derecha
+- Debes marcar EXACTAMENTE 6 PUNTOS CORRESPONDIENTES en ambas imágenes
+- Los puntos deben marcarse EN EL MISMO ORDEN en ambas imágenes
+
+LOS 6 PUNTOS A MARCAR (en este orden exacto):
+  1. Intersección línea del área con línea de fondo (lado izquierdo)
+  2. Esquina del área con línea de fondo (esquina área grande)
+  3. Otra esquina del área grande (lado opuesto)
+  4. Esquina del campo (corner más alejado/contrario)
+  5. Línea de medio campo donde intercepta línea de banda
+  6. Centro del campo (punto central)
+
+ENTRADA ACEPTADA:
   - Una imagen (.jpg, .png)
-  - Un video (.mp4, .mov) - Se extraerá un frame automáticamente
-  - Una carpeta con videos - Se usará el primer video
+  - Un video (.mp4, .mov) → Se extraerá un frame automáticamente
+  - Una carpeta con videos → Se usará el primer video
+
+IMPORTANTE: Las cámaras deben estar en su POSICIÓN FINAL (como en partidos).
 """)
 
         input("Presiona ENTER para continuar...")
@@ -193,22 +229,61 @@ NOTA: Puedes pasar:
         
         img_left = cv2.undistort(img_left, cal_left['camera_matrix'], cal_left['dist_coeffs'])
         img_right = cv2.undistort(img_right, cal_right['camera_matrix'], cal_right['dist_coeffs'])
-        
-        print("\nPASO 1: Selecciona puntos en la imagen IZQUIERDA")
-        self.seleccionar_puntos(img_left, "Imagen IZQUIERDA - Selecciona puntos", "left")
-        
-        print("\nPASO 2: Selecciona los MISMOS puntos en la imagen DERECHA")
-        print("(En el mismo orden)")
-        self.seleccionar_puntos(img_right, "Imagen DERECHA - Selecciona puntos", "right")
+
+        # Instrucciones específicas de los 6 puntos a marcar
+        instrucciones_puntos = [
+            "Intersección línea del área con línea de fondo (lado izquierdo)",
+            "Esquina del área con línea de fondo (esquina del área grande)",
+            "Otra esquina del área grande (lado opuesto)",
+            "Esquina del campo (corner más alejado/contrario)",
+            "Línea de medio campo donde intercepta línea de banda",
+            "Centro del campo (punto central)"
+        ]
+
+        print("\n" + "="*60)
+        print("PASO 1: IMAGEN IZQUIERDA")
+        print("="*60)
+        print("\n¡IMPORTANTE! Marca EXACTAMENTE estos 6 puntos en este orden.")
+        print("Los tendrás que marcar EN EL MISMO ORDEN en la imagen derecha.\n")
+        self.seleccionar_puntos(img_left, "Imagen IZQUIERDA", "left", instrucciones_puntos)
+
+        print("\n" + "="*60)
+        print("PASO 2: IMAGEN DERECHA")
+        print("="*60)
+        print("\n¡IMPORTANTE! Marca los MISMOS puntos EN EL MISMO ORDEN.\n")
+        self.seleccionar_puntos(img_right, "Imagen DERECHA", "right", instrucciones_puntos)
         
         if len(self.points_left) != len(self.points_right):
-            print(f"\nERROR: Diferente numero de puntos")
-            print(f"Izquierda: {len(self.points_left)}, Derecha: {len(self.points_right)}")
+            print(f"\n{'='*60}")
+            print("ERROR: DIFERENTE NÚMERO DE PUNTOS")
+            print(f"{'='*60}")
+            print(f"  Izquierda: {len(self.points_left)} puntos")
+            print(f"  Derecha: {len(self.points_right)} puntos")
+            print("\nDebes marcar el MISMO número de puntos en ambas imágenes.")
+            print(f"{'='*60}\n")
             return
-        
+
         if len(self.points_left) < 4:
-            print(f"\nERROR: Necesitas al menos 4 puntos (tienes {len(self.points_left)})")
+            print(f"\n{'='*60}")
+            print("ERROR: PUNTOS INSUFICIENTES")
+            print(f"{'='*60}")
+            print(f"  Puntos marcados: {len(self.points_left)}")
+            print(f"  Mínimo requerido: 4 puntos")
+            print(f"  Recomendado: 6 puntos")
+            print(f"{'='*60}\n")
             return
+
+        if len(self.points_left) != 6:
+            print(f"\n{'='*60}")
+            print("ADVERTENCIA: NO SON 6 PUNTOS")
+            print(f"{'='*60}")
+            print(f"  Puntos marcados: {len(self.points_left)}")
+            print(f"  Recomendado: 6 puntos")
+            print("\nPara mejor precisión, se recomienda usar exactamente 6 puntos.")
+            continuar = input("¿Continuar de todos modos? (s/n): ").strip().lower()
+            if continuar != 's':
+                print("Operación cancelada. Vuelve a ejecutar el script.\n")
+                return
         
         print(f"\nCalculando homografia con {len(self.points_left)} puntos...")
         pts_left = np.float32(self.points_left)
