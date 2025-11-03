@@ -15,6 +15,9 @@ class HomographyConfigurator:
         self.window_name = ""
         self.display_scale = 1.0  # Escala de visualización
         self.original_size = (0, 0)  # Tamaño original de la imagen
+        self.offset_x = 0  # Offset X del letterbox
+        self.offset_y = 0  # Offset Y del letterbox
+        self.scaled_image_backup = None  # Backup para reset
 
     def extraer_frame_de_video(self, video_path, output_path):
         """
@@ -96,63 +99,93 @@ class HomographyConfigurator:
         
     def mouse_callback(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
-            # Convertir coordenadas de display a coordenadas originales
-            x_original = int(x / self.display_scale)
-            y_original = int(y / self.display_scale)
+            # Restar offset del letterbox
+            x_scaled = x - self.offset_x
+            y_scaled = y - self.offset_y
+
+            # Verificar que el click esté dentro de la imagen (no en bordes negros)
+            if x_scaled < 0 or y_scaled < 0:
+                print(f"  ⚠ Click fuera de la imagen (en borde negro). Inténtalo de nuevo.")
+                return
+
+            # Convertir coordenadas escaladas a originales
+            x_original = int(x_scaled / self.display_scale)
+            y_original = int(y_scaled / self.display_scale)
+
+            # Verificar límites
+            w_original, h_original = self.original_size
+            if x_original >= w_original or y_original >= h_original:
+                print(f"  ⚠ Click fuera de la imagen. Inténtalo de nuevo.")
+                return
 
             if param == "left":
                 self.points_left.append((x_original, y_original))
                 num_punto = len(self.points_left)
-                print(f"✓ Punto {num_punto} marcado: ({x_original}, {y_original})")
+                print(f"✓ Punto {num_punto} marcado en coordenadas originales: ({x_original}, {y_original})")
             else:
                 self.points_right.append((x_original, y_original))
                 num_punto = len(self.points_right)
-                print(f"✓ Punto {num_punto} marcado: ({x_original}, {y_original})")
+                print(f"✓ Punto {num_punto} marcado en coordenadas originales: ({x_original}, {y_original})")
 
-            # Dibujar en coordenadas de display (x, y sin convertir)
-            cv2.circle(self.current_image, (x, y), 8, (0, 255, 0), -1)
-            cv2.circle(self.current_image, (x, y), 9, (0, 0, 0), 2)
+            # Dibujar en coordenadas de display (x, y incluyen offset del letterbox)
+            cv2.circle(self.current_image, (x, y), 10, (0, 255, 0), -1)
+            cv2.circle(self.current_image, (x, y), 11, (0, 0, 0), 2)
             cv2.putText(self.current_image, str(len(self.points_left if param == "left" else self.points_right)),
-                       (x + 15, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                       (x + 15, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
             cv2.imshow(self.window_name, self.current_image)
     
     def seleccionar_puntos(self, image, title, side, instrucciones_puntos):
         """
-        Muestra la imagen COMPLETA (sin recortar) en una ventana.
-        La escala proporcionalmente para que quepa en pantalla.
+        Muestra la imagen COMPLETA con letterbox (barras negras) para forzar
+        que OpenCV muestre TODO sin recortar.
         """
         # Obtener tamaño de la imagen original
         h_original, w_original = image.shape[:2]
 
-        print(f"\n  Resolución original: {w_original}x{h_original}")
+        print(f"\n  Resolución original del video: {w_original}x{h_original}")
 
-        # Tamaño máximo de ventana (90% de una pantalla típica)
-        max_width = 1600
-        max_height = 900
+        # Tamaño objetivo (ventana grande para máxima precisión)
+        target_width = 1920   # Más grande para mejor precisión
+        target_height = 1080
 
-        # Calcular escala para que quepa COMPLETA en la ventana
-        scale = min(max_width / w_original, max_height / h_original, 1.0)
+        # Calcular escala para que quepa COMPLETA manteniendo aspecto
+        scale = min(target_width / w_original, target_height / h_original)
 
-        # Nuevas dimensiones manteniendo proporción
-        display_w = int(w_original * scale)
-        display_h = int(h_original * scale)
+        # Dimensiones escaladas de la imagen
+        scaled_w = int(w_original * scale)
+        scaled_h = int(h_original * scale)
 
-        print(f"  Mostrando en: {display_w}x{display_h} (escala: {scale:.2f})")
-        print(f"  La imagen se muestra COMPLETA (sin recortes)\n")
+        print(f"  Imagen escalada a: {scaled_w}x{scaled_h} (escala: {scale:.3f})")
 
-        # Redimensionar la imagen PROPORCIONALMENTE para display
-        display_image = cv2.resize(image, (display_w, display_h), interpolation=cv2.INTER_AREA)
+        # Redimensionar la imagen proporcionalmente
+        scaled_image = cv2.resize(image, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
 
-        # Guardar escala para convertir clicks a coordenadas originales
+        # Crear imagen negra del tamaño objetivo (letterbox)
+        letterbox_image = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+
+        # Calcular posición para centrar la imagen escalada
+        offset_x = (target_width - scaled_w) // 2
+        offset_y = (target_height - scaled_h) // 2
+
+        print(f"  Canvas final: {target_width}x{target_height} con padding")
+        print(f"  Offset: x={offset_x}, y={offset_y}")
+        print(f"  ¡AHORA VERÁS LA IMAGEN COMPLETA CON BORDES NEGROS!\n")
+
+        # Colocar la imagen escalada en el centro del letterbox
+        letterbox_image[offset_y:offset_y+scaled_h, offset_x:offset_x+scaled_w] = scaled_image
+
+        # Guardar parámetros para convertir clicks
         self.display_scale = scale
+        self.offset_x = offset_x
+        self.offset_y = offset_y
         self.original_size = (w_original, h_original)
 
-        self.current_image = display_image.copy()
+        self.current_image = letterbox_image.copy()
+        self.scaled_image_backup = scaled_image.copy()  # Para reset
         self.window_name = title
 
-        # Crear ventana con tamaño fijo
-        cv2.namedWindow(title, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(title, display_w, display_h)
+        # Crear ventana AUTOSIZE (no permite redimensionar, muestra TODO)
+        cv2.namedWindow(title, cv2.WINDOW_AUTOSIZE)
 
         cv2.setMouseCallback(title, self.mouse_callback, side)
         cv2.imshow(title, self.current_image)
@@ -179,8 +212,10 @@ class HomographyConfigurator:
                     self.points_left = []
                 else:
                     self.points_right = []
-                # Usar display_image, no image (que es original sin escalar)
-                self.current_image = display_image.copy()
+                # Recrear letterbox limpio
+                letterbox_clean = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+                letterbox_clean[offset_y:offset_y+scaled_h, offset_x:offset_x+scaled_w] = self.scaled_image_backup
+                self.current_image = letterbox_clean.copy()
                 cv2.imshow(title, self.current_image)
                 print("\n✗ Puntos reiniciados. Empieza de nuevo desde el punto 1.\n")
 
