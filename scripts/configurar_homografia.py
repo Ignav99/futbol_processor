@@ -282,12 +282,39 @@ IMPORTANTE: Las cámaras deben estar en su POSICIÓN FINAL (como en partidos).
             print(f"  Izquierda: {frame_izq_path}")
             print(f"  Derecha: {frame_der_path}")
             return
-        
+
+        print(f"\n  DEBUG - Tamaño ORIGINAL extraído del video:")
+        print(f"    Izquierda: {img_left.shape[1]}x{img_left.shape[0]}")
+        print(f"    Derecha: {img_right.shape[1]}x{img_right.shape[0]}")
+
         cal_left = np.load(self.calibration_folder / "calibracion_cam_izq.npz")
         cal_right = np.load(self.calibration_folder / "calibracion_cam_der.npz")
-        
-        img_left = cv2.undistort(img_left, cal_left['camera_matrix'], cal_left['dist_coeffs'])
-        img_right = cv2.undistort(img_right, cal_right['camera_matrix'], cal_right['dist_coeffs'])
+
+        # Obtener nuevo tamaño óptimo que NO recorta nada
+        h_left, w_left = img_left.shape[:2]
+        h_right, w_right = img_right.shape[:2]
+
+        new_camera_matrix_left, roi_left = cv2.getOptimalNewCameraMatrix(
+            cal_left['camera_matrix'], cal_left['dist_coeffs'],
+            (w_left, h_left), alpha=1.0, newImgSize=(w_left, h_left)
+        )
+        new_camera_matrix_right, roi_right = cv2.getOptimalNewCameraMatrix(
+            cal_right['camera_matrix'], cal_right['dist_coeffs'],
+            (w_right, h_right), alpha=1.0, newImgSize=(w_right, h_right)
+        )
+
+        print(f"\n  Aplicando corrección de distorsión (alpha=1.0 = SIN recortar)...")
+
+        # Undistort con nueva matriz que NO recorta
+        img_left = cv2.undistort(img_left, cal_left['camera_matrix'],
+                                 cal_left['dist_coeffs'], None, new_camera_matrix_left)
+        img_right = cv2.undistort(img_right, cal_right['camera_matrix'],
+                                   cal_right['dist_coeffs'], None, new_camera_matrix_right)
+
+        print(f"  DEBUG - Tamaño DESPUÉS de undistort:")
+        print(f"    Izquierda: {img_left.shape[1]}x{img_left.shape[0]}")
+        print(f"    Derecha: {img_right.shape[1]}x{img_right.shape[0]}")
+        print(f"  ✓ Imagen COMPLETA mantenida (alpha=1.0)\n")
 
         # Instrucciones específicas de los 6 puntos a marcar
         instrucciones_puntos = [
