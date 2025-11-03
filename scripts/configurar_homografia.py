@@ -13,6 +13,8 @@ class HomographyConfigurator:
         self.points_right = []
         self.current_image = None
         self.window_name = ""
+        self.display_scale = 1.0  # Escala de visualización
+        self.original_size = (0, 0)  # Tamaño original de la imagen
 
     def extraer_frame_de_video(self, video_path, output_path):
         """
@@ -94,13 +96,20 @@ class HomographyConfigurator:
         
     def mouse_callback(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
+            # Convertir coordenadas de display a coordenadas originales
+            x_original = int(x / self.display_scale)
+            y_original = int(y / self.display_scale)
+
             if param == "left":
-                self.points_left.append((x, y))
-                print(f"Punto {len(self.points_left)} en imagen IZQUIERDA: ({x}, {y})")
+                self.points_left.append((x_original, y_original))
+                num_punto = len(self.points_left)
+                print(f"✓ Punto {num_punto} marcado: ({x_original}, {y_original})")
             else:
-                self.points_right.append((x, y))
-                print(f"Punto {len(self.points_right)} en imagen DERECHA: ({x}, {y})")
-            
+                self.points_right.append((x_original, y_original))
+                num_punto = len(self.points_right)
+                print(f"✓ Punto {num_punto} marcado: ({x_original}, {y_original})")
+
+            # Dibujar en coordenadas de display (x, y sin convertir)
             cv2.circle(self.current_image, (x, y), 8, (0, 255, 0), -1)
             cv2.circle(self.current_image, (x, y), 9, (0, 0, 0), 2)
             cv2.putText(self.current_image, str(len(self.points_left if param == "left" else self.points_right)),
@@ -108,28 +117,42 @@ class HomographyConfigurator:
             cv2.imshow(self.window_name, self.current_image)
     
     def seleccionar_puntos(self, image, title, side, instrucciones_puntos):
-        self.current_image = image.copy()
+        """
+        Muestra la imagen COMPLETA (sin recortar) en una ventana.
+        La escala proporcionalmente para que quepa en pantalla.
+        """
+        # Obtener tamaño de la imagen original
+        h_original, w_original = image.shape[:2]
+
+        print(f"\n  Resolución original: {w_original}x{h_original}")
+
+        # Tamaño máximo de ventana (90% de una pantalla típica)
+        max_width = 1600
+        max_height = 900
+
+        # Calcular escala para que quepa COMPLETA en la ventana
+        scale = min(max_width / w_original, max_height / h_original, 1.0)
+
+        # Nuevas dimensiones manteniendo proporción
+        display_w = int(w_original * scale)
+        display_h = int(h_original * scale)
+
+        print(f"  Mostrando en: {display_w}x{display_h} (escala: {scale:.2f})")
+        print(f"  La imagen se muestra COMPLETA (sin recortes)\n")
+
+        # Redimensionar la imagen PROPORCIONALMENTE para display
+        display_image = cv2.resize(image, (display_w, display_h), interpolation=cv2.INTER_AREA)
+
+        # Guardar escala para convertir clicks a coordenadas originales
+        self.display_scale = scale
+        self.original_size = (w_original, h_original)
+
+        self.current_image = display_image.copy()
         self.window_name = title
 
-        # Crear ventana y maximizarla
+        # Crear ventana con tamaño fijo
         cv2.namedWindow(title, cv2.WINDOW_NORMAL)
-
-        # Obtener tamaño de la imagen original
-        h, w = image.shape[:2]
-
-        # Usar 90% del tamaño de pantalla (asumiendo 1920x1080 o mayor)
-        # Si la imagen es muy grande, escalarla pero sin perder mucho detalle
-        max_width = 1800
-        max_height = 1000
-
-        if w > max_width or h > max_height:
-            scale = min(max_width / w, max_height / h)
-            new_w = int(w * scale)
-            new_h = int(h * scale)
-            cv2.resizeWindow(title, new_w, new_h)
-        else:
-            # Usar tamaño original si cabe
-            cv2.resizeWindow(title, w, h)
+        cv2.resizeWindow(title, display_w, display_h)
 
         cv2.setMouseCallback(title, self.mouse_callback, side)
         cv2.imshow(title, self.current_image)
@@ -156,10 +179,11 @@ class HomographyConfigurator:
                     self.points_left = []
                 else:
                     self.points_right = []
-                self.current_image = image.copy()
+                # Usar display_image, no image (que es original sin escalar)
+                self.current_image = display_image.copy()
                 cv2.imshow(title, self.current_image)
                 print("\n✗ Puntos reiniciados. Empieza de nuevo desde el punto 1.\n")
-        
+
         cv2.destroyAllWindows()
     
     def configurar_homografia_interactiva(self):
