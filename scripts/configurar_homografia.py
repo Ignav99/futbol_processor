@@ -287,34 +287,52 @@ IMPORTANTE: Las cámaras deben estar en su POSICIÓN FINAL (como en partidos).
         print(f"    Izquierda: {img_left.shape[1]}x{img_left.shape[0]}")
         print(f"    Derecha: {img_right.shape[1]}x{img_right.shape[0]}")
 
-        cal_left = np.load(self.calibration_folder / "calibracion_cam_izq.npz")
-        cal_right = np.load(self.calibration_folder / "calibracion_cam_der.npz")
+        # Preguntar si quiere usar undistort o imagen RAW
+        print("\n" + "="*60)
+        print("CORRECCIÓN DE DISTORSIÓN")
+        print("="*60)
+        print("\nLas action cameras tienen distorsión de lente.")
+        print("Opciones:")
+        print("  1. CON corrección (undistort) - Recomendado si calibración correcta")
+        print("  2. SIN corrección (RAW) - Usar si calibración tiene problemas")
+        print("\nNOTA: Si ves imagen casi toda negra, la calibración está mal.")
+        print("      En ese caso, elige opción 2 (SIN corrección) o re-calibra.\n")
 
-        # Obtener nuevo tamaño óptimo que NO recorta nada
-        h_left, w_left = img_left.shape[:2]
-        h_right, w_right = img_right.shape[:2]
+        usar_undistort = input("¿Aplicar corrección de distorsión? (s/n): ").strip().lower()
 
-        new_camera_matrix_left, roi_left = cv2.getOptimalNewCameraMatrix(
-            cal_left['camera_matrix'], cal_left['dist_coeffs'],
-            (w_left, h_left), alpha=1.0, newImgSize=(w_left, h_left)
-        )
-        new_camera_matrix_right, roi_right = cv2.getOptimalNewCameraMatrix(
-            cal_right['camera_matrix'], cal_right['dist_coeffs'],
-            (w_right, h_right), alpha=1.0, newImgSize=(w_right, h_right)
-        )
+        if usar_undistort == 's':
+            cal_left = np.load(self.calibration_folder / "calibracion_cam_izq.npz")
+            cal_right = np.load(self.calibration_folder / "calibracion_cam_der.npz")
 
-        print(f"\n  Aplicando corrección de distorsión (alpha=1.0 = SIN recortar)...")
+            # Obtener nuevo tamaño óptimo que NO recorta nada
+            h_left, w_left = img_left.shape[:2]
+            h_right, w_right = img_right.shape[:2]
 
-        # Undistort con nueva matriz que NO recorta
-        img_left = cv2.undistort(img_left, cal_left['camera_matrix'],
-                                 cal_left['dist_coeffs'], None, new_camera_matrix_left)
-        img_right = cv2.undistort(img_right, cal_right['camera_matrix'],
-                                   cal_right['dist_coeffs'], None, new_camera_matrix_right)
+            new_camera_matrix_left, roi_left = cv2.getOptimalNewCameraMatrix(
+                cal_left['camera_matrix'], cal_left['dist_coeffs'],
+                (w_left, h_left), alpha=1.0, newImgSize=(w_left, h_left)
+            )
+            new_camera_matrix_right, roi_right = cv2.getOptimalNewCameraMatrix(
+                cal_right['camera_matrix'], cal_right['dist_coeffs'],
+                (w_right, h_right), alpha=1.0, newImgSize=(w_right, h_right)
+            )
 
-        print(f"  DEBUG - Tamaño DESPUÉS de undistort:")
-        print(f"    Izquierda: {img_left.shape[1]}x{img_left.shape[0]}")
-        print(f"    Derecha: {img_right.shape[1]}x{img_right.shape[0]}")
-        print(f"  ✓ Imagen COMPLETA mantenida (alpha=1.0)\n")
+            print(f"\n  Aplicando corrección de distorsión (alpha=1.0 = SIN recortar)...")
+
+            # Undistort con nueva matriz que NO recorta
+            img_left = cv2.undistort(img_left, cal_left['camera_matrix'],
+                                     cal_left['dist_coeffs'], None, new_camera_matrix_left)
+            img_right = cv2.undistort(img_right, cal_right['camera_matrix'],
+                                       cal_right['dist_coeffs'], None, new_camera_matrix_right)
+
+            print(f"  DEBUG - Tamaño DESPUÉS de undistort:")
+            print(f"    Izquierda: {img_left.shape[1]}x{img_left.shape[0]}")
+            print(f"    Derecha: {img_right.shape[1]}x{img_right.shape[0]}")
+            print(f"  ✓ Imagen COMPLETA mantenida (alpha=1.0)\n")
+        else:
+            print(f"\n  ⚠ Usando imágenes RAW SIN corrección de distorsión")
+            print(f"  Las imágenes tendrán la curvatura original de la lente")
+            print(f"  Esto puede funcionar si ambas cámaras tienen distorsión similar\n")
 
         # Instrucciones específicas de los 6 puntos a marcar
         instrucciones_puntos = [
