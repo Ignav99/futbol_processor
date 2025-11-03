@@ -5,10 +5,11 @@ import os
 import glob
 import subprocess
 import tempfile
+from config_utils import obtener_carpeta_configuracion
 
 class HomographyConfigurator:
     def __init__(self):
-        self.calibration_folder = Path.home() / "futbol_calibracion"
+        self.calibration_folder = obtener_carpeta_configuracion()
         self.points_left = []
         self.points_right = []
         self.current_image = None

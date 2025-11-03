@@ -5,13 +5,14 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from config_utils import obtener_carpeta_configuracion
 
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 class DriveConfigurator:
     def __init__(self):
-        self.config_folder = Path.home() / "futbol_calibracion"
-        self.config_folder.mkdir(exist_ok=True)
+        self.config_folder = obtener_carpeta_configuracion()
+        print(f"\n📁 Usando carpeta de configuración: {self.config_folder}\n")
         self.credentials_file = self.config_folder / "drive_credentials.json"
         self.token_file = self.config_folder / "drive_token.pickle"
     

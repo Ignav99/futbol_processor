@@ -3,6 +3,7 @@
 
 import sys
 from pathlib import Path
+from config_utils import obtener_carpeta_configuracion
 
 def main():
     print("\n" + "="*60)
@@ -47,8 +48,8 @@ def main():
         print(f"  FALTA: Google API Client")
     
     # Verificar archivos de configuración
-    config_folder = Path.home() / "futbol_calibracion"
-    print(f"\nArchivos de configuracion:")
+    config_folder = obtener_carpeta_configuracion()
+    print(f"\nArchivos de configuracion en: {config_folder}")
     
     archivos = [
         "calibracion_cam_izq.npz",

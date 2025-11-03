@@ -2,14 +2,14 @@ import cv2
 import numpy as np
 import os
 from pathlib import Path
+from config_utils import obtener_carpeta_configuracion
 
 CHESSBOARD_SIZE = (9, 6)
 SQUARE_SIZE = 25
 
 class CameraCalibrator:
     def __init__(self):
-        self.calibration_folder = Path.home() / "futbol_calibracion"
-        self.calibration_folder.mkdir(exist_ok=True)
+        self.calibration_folder = obtener_carpeta_configuracion()
         
     def calibrar_desde_video(self, video_path, nombre_camara):
         print(f"\nCalibrando {nombre_camara}...")

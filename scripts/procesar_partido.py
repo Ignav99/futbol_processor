@@ -13,10 +13,11 @@ import subprocess
 import tempfile
 import os
 import glob
+from config_utils import obtener_carpeta_configuracion
 
 class PartidoProcessor:
     def __init__(self):
-        self.config_folder = Path.home() / "futbol_calibracion"
+        self.config_folder = obtener_carpeta_configuracion()
         self.output_folder = Path.home() / "futbol_output"
         self.output_folder.mkdir(exist_ok=True)
         
