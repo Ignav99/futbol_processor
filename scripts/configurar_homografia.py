@@ -127,11 +127,13 @@ class HomographyConfigurator:
                 num_punto = len(self.points_right)
                 print(f"✓ Punto {num_punto} marcado en coordenadas originales: ({x_original}, {y_original})")
 
-            # Dibujar en coordenadas de display (x, y incluyen offset del letterbox)
-            cv2.circle(self.current_image, (x, y), 10, (0, 255, 0), -1)
-            cv2.circle(self.current_image, (x, y), 11, (0, 0, 0), 2)
+            # Dibujar círculos pequeños para más precisión
+            cv2.circle(self.current_image, (x, y), 5, (0, 255, 0), -1)  # Círculo verde pequeño
+            cv2.circle(self.current_image, (x, y), 6, (0, 0, 0), 1)     # Borde negro fino
+            cv2.circle(self.current_image, (x, y), 1, (255, 255, 255), -1)  # Punto blanco central
+            # Número más lejos para no tapar
             cv2.putText(self.current_image, str(len(self.points_left if param == "left" else self.points_right)),
-                       (x + 15, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+                       (x + 20, y - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
             cv2.imshow(self.window_name, self.current_image)
     
     def seleccionar_puntos(self, image, title, side, instrucciones_puntos):
@@ -144,9 +146,9 @@ class HomographyConfigurator:
 
         print(f"\n  Resolución original del video: {w_original}x{h_original}")
 
-        # Tamaño objetivo (ventana grande para máxima precisión)
-        target_width = 1920   # Más grande para mejor precisión
-        target_height = 1080
+        # Tamaño objetivo (casi pantalla completa para máxima precisión)
+        target_width = 2400   # Más grande para mejor precisión
+        target_height = 1350
 
         # Calcular escala para que quepa COMPLETA manteniendo aspecto
         scale = min(target_width / w_original, target_height / h_original)
@@ -167,9 +169,9 @@ class HomographyConfigurator:
         offset_x = (target_width - scaled_w) // 2
         offset_y = (target_height - scaled_h) // 2
 
-        print(f"  Canvas final: {target_width}x{target_height} con padding")
+        print(f"  Canvas final: {target_width}x{target_height} (ventana grande)")
         print(f"  Offset: x={offset_x}, y={offset_y}")
-        print(f"  ¡AHORA VERÁS LA IMAGEN COMPLETA CON BORDES NEGROS!\n")
+        print(f"  ✓ Ventana grande para máxima precisión\n")
 
         # Colocar la imagen escalada en el centro del letterbox
         letterbox_image[offset_y:offset_y+scaled_h, offset_x:offset_x+scaled_w] = scaled_image
