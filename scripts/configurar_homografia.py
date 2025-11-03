@@ -1,6 +1,10 @@
 import cv2
 import numpy as np
 from pathlib import Path
+import os
+import glob
+import subprocess
+import tempfile
 
 class HomographyConfigurator:
     def __init__(self):
@@ -9,6 +13,84 @@ class HomographyConfigurator:
         self.points_right = []
         self.current_image = None
         self.window_name = ""
+
+    def extraer_frame_de_video(self, video_path, output_path):
+        """
+        Extrae un frame del video usando ffmpeg
+        """
+        print(f"  Extrayendo frame de: {os.path.basename(video_path)}...")
+
+        cmd = [
+            'ffmpeg', '-i', str(video_path),
+            '-ss', '00:00:02',  # Segundo 2
+            '-frames:v', '1',
+            '-y',  # Sobrescribir
+            str(output_path)
+        ]
+
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        if result.returncode == 0:
+            print(f"  Frame extraído: {output_path}")
+            return True
+        else:
+            print(f"  ERROR: No se pudo extraer frame")
+            return False
+
+    def obtener_imagen_o_extraer(self, ruta_input, nombre_camara):
+        """
+        Si es una imagen, la devuelve.
+        Si es una carpeta, busca el primer video y extrae un frame.
+        Si es un video, extrae un frame.
+        """
+        ruta = Path(ruta_input)
+
+        # Si es una imagen directamente
+        if ruta.is_file() and ruta.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
+            print(f"  Usando imagen: {ruta.name}")
+            return str(ruta)
+
+        # Si es una carpeta, buscar primer video
+        if ruta.is_dir():
+            print(f"\n  Detectada carpeta: {ruta.name}")
+            print(f"  Buscando primer video...")
+
+            extensiones = ['*.MP4', '*.mp4', '*.MOV', '*.mov', '*.AVI', '*.avi']
+            videos = []
+            for ext in extensiones:
+                videos.extend(glob.glob(os.path.join(ruta, ext)))
+
+            if not videos:
+                print(f"  ERROR: No se encontraron videos en {ruta}")
+                return None
+
+            # Ordenar por fecha y tomar el primero
+            videos.sort(key=os.path.getmtime)
+            video_path = videos[0]
+            print(f"  Primer video encontrado: {os.path.basename(video_path)}")
+
+            # Extraer frame a carpeta temporal
+            output_frame = self.calibration_folder / f"temp_frame_{nombre_camara}.jpg"
+            if self.extraer_frame_de_video(video_path, output_frame):
+                return str(output_frame)
+            else:
+                return None
+
+        # Si es un archivo de video directamente
+        if ruta.is_file() and ruta.suffix.lower() in ['.mp4', '.mov', '.avi']:
+            print(f"\n  Detectado video: {ruta.name}")
+            output_frame = self.calibration_folder / f"temp_frame_{nombre_camara}.jpg"
+            if self.extraer_frame_de_video(str(ruta), output_frame):
+                return str(output_frame)
+            else:
+                return None
+
+        print(f"  ERROR: No se reconoce el tipo de archivo/carpeta")
+        return None
         
     def mouse_callback(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -68,19 +150,42 @@ INSTRUCCIONES:
    - Esquinas del campo
    - Lineas de esquina
 4. IMPORTANTE: Haz clic en los puntos EN EL MISMO ORDEN en ambas imagenes
+
+NOTA: Puedes pasar:
+  - Una imagen (.jpg, .png)
+  - Un video (.mp4, .mov) - Se extraerá un frame automáticamente
+  - Una carpeta con videos - Se usará el primer video
 """)
-        
+
         input("Presiona ENTER para continuar...")
-        
+
         print("\n" + "-"*60)
-        frame_izq_path = input("Ruta de un FRAME de la camara IZQUIERDA: ").strip()
-        frame_der_path = input("Ruta de un FRAME de la camara DERECHA: ").strip()
-        
+        print("CAMARA IZQUIERDA:")
+        ruta_izq_input = input("Ruta (imagen/video/carpeta): ").strip()
+        frame_izq_path = self.obtener_imagen_o_extraer(ruta_izq_input, "izq")
+
+        if not frame_izq_path:
+            print("\nERROR: No se pudo obtener imagen de cámara izquierda")
+            return
+
+        print("\n" + "-"*60)
+        print("CAMARA DERECHA:")
+        ruta_der_input = input("Ruta (imagen/video/carpeta): ").strip()
+        frame_der_path = self.obtener_imagen_o_extraer(ruta_der_input, "der")
+
+        if not frame_der_path:
+            print("\nERROR: No se pudo obtener imagen de cámara derecha")
+            return
+
+        print("\n" + "-"*60)
+        print("Cargando imágenes...")
         img_left = cv2.imread(frame_izq_path)
         img_right = cv2.imread(frame_der_path)
-        
+
         if img_left is None or img_right is None:
-            print("Error al cargar las imagenes")
+            print("ERROR: No se pudieron cargar las imágenes")
+            print(f"  Izquierda: {frame_izq_path}")
+            print(f"  Derecha: {frame_der_path}")
             return
         
         cal_left = np.load(self.calibration_folder / "calibracion_cam_izq.npz")
