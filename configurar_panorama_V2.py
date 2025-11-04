@@ -25,7 +25,7 @@ import os
 # ==================== CONFIGURACIÓN ====================
 INPUT_LEFT = Path.home() / "Desktop" / "raw_video_left"
 INPUT_RIGHT = Path.home() / "Desktop" / "raw_video_right"
-OUTPUT_BASE = Path.home() / "futbol_output"
+OUTPUT_BASE = Path("/Users/User/Library/CloudStorage/GoogleDrive-ignaciovct99@gmail.com/Mi unidad/Documentos/PROYECTOS/CAC SENIOR B /Analisis de video/partidos_propios/futbol_processor")
 
 # ==================== FUNCIONES ====================
 
