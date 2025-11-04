@@ -247,29 +247,46 @@ LOS 6 PUNTOS A MARCAR (en este orden exacto):
   5. Línea de medio campo donde intercepta línea de banda
   6. Centro del campo (punto central)
 
-ENTRADA ACEPTADA:
-  - Una imagen (.jpg, .png)
-  - Un video (.mp4, .mov) → Se extraerá un frame automáticamente
-  - Una carpeta con videos → Se usará el primer video
+CARPETAS DE VIDEO (FIJAS):
+  - Izquierda: ~/Desktop/raw_video_left
+  - Derecha: ~/Desktop/raw_video_right
+
+El script buscará automáticamente el primer video en cada carpeta.
 
 IMPORTANTE: Las cámaras deben estar en su POSICIÓN FINAL (como en partidos).
 """)
 
         input("Presiona ENTER para continuar...")
 
-        print("\n" + "-"*60)
-        print("CAMARA IZQUIERDA:")
-        ruta_izq_input = input("Ruta (imagen/video/carpeta): ").strip()
-        frame_izq_path = self.obtener_imagen_o_extraer(ruta_izq_input, "izq")
+        # RUTAS FIJAS - No preguntar al usuario
+        carpeta_izq = Path.home() / "Desktop" / "raw_video_left"
+        carpeta_der = Path.home() / "Desktop" / "raw_video_right"
 
-        if not frame_izq_path:
-            print("\nERROR: No se pudo obtener imagen de cámara izquierda")
+        # Verificar que existan las carpetas
+        if not carpeta_izq.exists():
+            print(f"\n❌ ERROR: Carpeta no encontrada: {carpeta_izq}")
+            print("Crea la carpeta y copia los videos de la cámara izquierda.")
+            return
+
+        if not carpeta_der.exists():
+            print(f"\n❌ ERROR: Carpeta no encontrada: {carpeta_der}")
+            print("Crea la carpeta y copia los videos de la cámara derecha.")
             return
 
         print("\n" + "-"*60)
-        print("CAMARA DERECHA:")
-        ruta_der_input = input("Ruta (imagen/video/carpeta): ").strip()
-        frame_der_path = self.obtener_imagen_o_extraer(ruta_der_input, "der")
+        print("BUSCANDO VIDEOS AUTOMÁTICAMENTE...")
+        print(f"  Izquierda: {carpeta_izq}")
+        print(f"  Derecha: {carpeta_der}")
+
+        # Extraer frames automáticamente
+        frame_izq_path = self.obtener_imagen_o_extraer(str(carpeta_izq), "izq")
+
+        if not frame_izq_path:
+            print("\n❌ ERROR: No se pudo obtener imagen de cámara izquierda")
+            print("Verifica que haya videos en la carpeta.")
+            return
+
+        frame_der_path = self.obtener_imagen_o_extraer(str(carpeta_der), "der")
 
         if not frame_der_path:
             print("\nERROR: No se pudo obtener imagen de cámara derecha")
