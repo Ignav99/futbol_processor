@@ -1,12 +1,12 @@
 #!/bin/bash
-# Script de lanzamiento simple
-# Hacer doble clic en este archivo para procesar un partido
+# PIPELINE COMPLETO - Procesar Partido
+# Hacer doble clic para procesar un partido automáticamente
 
 source ~/futbol_processor_env/bin/activate
 
-cd ~/futbol_processor/scripts
+cd "$(dirname "$0")"
 
-python3 procesar_partido.py
+python3 procesar_partido_completo.py
 
 echo ""
 echo "Presiona cualquier tecla para cerrar..."
