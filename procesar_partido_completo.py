@@ -149,14 +149,175 @@ def detectar_balon(frame):
     return None
 
 
+def configurar_homografia_partido(video_izq, video_der):
+    """
+    Configura la homografía para este partido específico.
+    Extrae frames y pide al usuario que marque los 6 puntos.
+    Devuelve la matriz de homografía.
+    """
+    print("\n" + "="*70)
+    print("  CONFIGURAR HOMOGRAFÍA PARA ESTE PARTIDO")
+    print("="*70)
+    print("\nCada campo es diferente (altura, posición cámaras).")
+    print("Debes marcar 6 puntos correspondientes en ambas imágenes.")
+    print("\nLOS 6 PUNTOS (en orden):")
+    print("  1. Intersección línea área con línea de fondo (izq)")
+    print("  2. Esquina área grande con línea de fondo")
+    print("  3. Otra esquina área grande (opuesto)")
+    print("  4. Esquina del campo (corner contrario)")
+    print("  5. Línea medio campo en línea de banda")
+    print("  6. Centro del campo")
+
+    input("\nPresiona ENTER para extraer frames y configurar homografía...")
+
+    # Extraer frames
+    print("\n🎞️  Extrayendo frames del segundo 2...")
+
+    temp_folder = Path.home() / "futbol_output"
+    temp_folder.mkdir(exist_ok=True)
+
+    frame_izq = temp_folder / "temp_frame_izq.jpg"
+    frame_der = temp_folder / "temp_frame_der.jpg"
+
+    # Extraer frame izquierdo
+    cmd = ['ffmpeg', '-i', str(video_izq), '-ss', '00:00:02', '-frames:v', '1',
+           '-y', str(frame_izq)]
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Extraer frame derecho
+    cmd = ['ffmpeg', '-i', str(video_der), '-ss', '00:00:02', '-frames:v', '1',
+           '-y', str(frame_der)]
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    if not frame_izq.exists() or not frame_der.exists():
+        print("❌ ERROR: No se pudieron extraer frames")
+        return None
+
+    print("✓ Frames extraídos")
+
+    # Cargar imágenes
+    img_left = cv2.imread(str(frame_izq))
+    img_right = cv2.imread(str(frame_der))
+
+    if img_left is None or img_right is None:
+        print("❌ ERROR: No se pudieron cargar imágenes")
+        return None
+
+    # Pedir al usuario que marque puntos
+    print("\n📍 MARCA 6 PUNTOS EN IMAGEN IZQUIERDA")
+    print("   Click en cada punto, presiona 'q' cuando termines")
+
+    points_left = marcar_puntos_manual(img_left, "IZQUIERDA - Marca 6 puntos")
+
+    if len(points_left) != 6:
+        print(f"❌ ERROR: Debes marcar exactamente 6 puntos (marcaste {len(points_left)})")
+        return None
+
+    print("\n📍 MARCA LOS MISMOS 6 PUNTOS EN IMAGEN DERECHA (MISMO ORDEN)")
+    print("   Click en cada punto, presiona 'q' cuando termines")
+
+    points_right = marcar_puntos_manual(img_right, "DERECHA - Marca 6 puntos (mismo orden)")
+
+    if len(points_right) != 6:
+        print(f"❌ ERROR: Debes marcar exactamente 6 puntos (marcaste {len(points_right)})")
+        return None
+
+    # Calcular homografía
+    print("\n🔄 Calculando homografía...")
+    pts_left = np.float32(points_left)
+    pts_right = np.float32(points_right)
+
+    H, status = cv2.findHomography(pts_right, pts_left, cv2.RANSAC, 5.0)
+
+    print(f"✓ Homografía calculada con {len(points_left)} puntos")
+
+    # Limpiar archivos temporales
+    frame_izq.unlink()
+    frame_der.unlink()
+
+    return H
+
+
+def marcar_puntos_manual(imagen, titulo):
+    """
+    Permite al usuario marcar puntos clickeando en la imagen.
+    Devuelve lista de puntos (x, y).
+    """
+    points = []
+    display_img = imagen.copy()
+
+    h_original, w_original = imagen.shape[:2]
+
+    # Escalar para ventana grande
+    target_width = 2400
+    target_height = 1350
+    scale = min(target_width / w_original, target_height / h_original)
+    scaled_w = int(w_original * scale)
+    scaled_h = int(h_original * scale)
+
+    display_img = cv2.resize(imagen, (scaled_w, scaled_h))
+
+    # Letterbox
+    letterbox = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+    offset_x = (target_width - scaled_w) // 2
+    offset_y = (target_height - scaled_h) // 2
+    letterbox[offset_y:offset_y+scaled_h, offset_x:offset_x+scaled_w] = display_img
+
+    current_img = letterbox.copy()
+
+    def mouse_callback(event, x, y, flags, param):
+        nonlocal current_img, points
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            # Convertir a coordenadas originales
+            x_scaled = x - offset_x
+            y_scaled = y - offset_y
+
+            if x_scaled < 0 or y_scaled < 0 or x_scaled >= scaled_w or y_scaled >= scaled_h:
+                return
+
+            x_original = int(x_scaled / scale)
+            y_original = int(y_scaled / scale)
+
+            points.append((x_original, y_original))
+
+            # Dibujar punto
+            cv2.circle(current_img, (x, y), 5, (0, 255, 0), -1)
+            cv2.circle(current_img, (x, y), 6, (0, 0, 0), 1)
+            cv2.circle(current_img, (x, y), 1, (255, 255, 255), -1)
+            cv2.putText(current_img, str(len(points)), (x + 20, y - 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.imshow(titulo, current_img)
+
+            print(f"  Punto {len(points)}/6 marcado")
+
+    cv2.namedWindow(titulo, cv2.WINDOW_AUTOSIZE)
+    cv2.setMouseCallback(titulo, mouse_callback)
+    cv2.imshow(titulo, current_img)
+
+    print(f"\nMarcando puntos en {titulo}...")
+    print("  - Click izquierdo: Marcar punto")
+    print("  - 'q': Terminar")
+
+    while True:
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
+
+    cv2.destroyAllWindows()
+
+    return points
+
+
 def procesar_partido(nombre_equipo):
     """
-    Procesa un partido completo:
+    Pipeline completo:
     1. Concatena videos
     2. Sincroniza
-    3. Genera panorama
-    4. Crea video táctico y seguimiento
-    5. Guarda en Drive
+    3. CONFIGURA HOMOGRAFÍA (marca 6 puntos)
+    4. Genera panorama
+    5. Crea video táctico y seguimiento
+    6. Guarda en Drive
     """
     print("\n" + "="*70)
     print(f"  PROCESANDO PARTIDO: {nombre_equipo}")
@@ -178,10 +339,14 @@ def procesar_partido(nombre_equipo):
     # 2. Sincronizar
     offset = sincronizar_videos(video_izq, video_der)
 
-    # 3. Cargar configuración
-    print("\n⚙️  Cargando configuración...")
-    homografia = np.load(CONFIG_FOLDER / "matriz_homografia.npy")
-    print("✓ Homografía cargada")
+    # 3. CONFIGURAR HOMOGRAFÍA PARA ESTE PARTIDO
+    homografia = configurar_homografia_partido(video_izq, video_der)
+
+    if homografia is None:
+        print("\n❌ ERROR: No se pudo configurar homografía")
+        return
+
+    print("✓ Homografía configurada para este partido")
 
     # 4. Abrir videos
     print("\n🎬 Abriendo videos...")
@@ -335,12 +500,6 @@ def main():
         print(f"  Izquierda: {INPUT_LEFT}")
         print(f"  Derecha: {INPUT_RIGHT}")
         print("\nCopia los videos de las tarjetas SD a estas carpetas.")
-        return
-
-    # Verificar configuración
-    if not (CONFIG_FOLDER / "matriz_homografia.npy").exists():
-        print("\n❌ ERROR: Falta configuración de homografía")
-        print("Ejecuta primero: python3 scripts/configurar_homografia.py")
         return
 
     # Preguntar nombre del equipo

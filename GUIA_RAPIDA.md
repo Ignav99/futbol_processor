@@ -2,22 +2,12 @@
 
 ## 📋 Configuración Inicial (Una Sola Vez)
 
-### 1. Instalar Dependencias
+### Instalar Dependencias
 ```bash
 bash setup_inicial.sh
 ```
 
-### 2. Configurar Homografía
-```bash
-source futbol_processor_env/bin/activate
-python3 scripts/configurar_homografia.py
-```
-
-**Cuando te pregunte:**
-- Cámara izquierda: `~/Desktop/raw_video_left`
-- Cámara derecha: `~/Desktop/raw_video_right`
-- Corrección de distorsión: `n` (sin undistort)
-- Marca los 6 puntos en orden
+**¡Listo!** Ya tienes todo instalado.
 
 ---
 
@@ -45,7 +35,18 @@ python3 procesar_partido_completo.py
 Nombre del equipo rival: CD Alcala
 ```
 
-### Paso 4: ¡Listo!
+### Paso 4: Configurar Homografía
+El script extraerá frames y te pedirá **marcar 6 puntos** en ambas imágenes:
+1. Intersección línea área con línea de fondo
+2. Esquina área grande con línea de fondo
+3. Otra esquina área grande (opuesto)
+4. Esquina del campo (corner contrario)
+5. Línea medio campo en línea de banda
+6. Centro del campo
+
+**IMPORTANTE:** Cada campo es diferente (altura, posición), por eso se hace cada vez.
+
+### Paso 5: ¡Listo!
 Los videos se guardarán en:
 ```
 /Users/User/Library/CloudStorage/GoogleDrive-.../Analisis de video/CD Alcala/
@@ -84,7 +85,7 @@ Google Drive (local)/
 1. ✅ Busca videos en `raw_video_left` y `raw_video_right`
 2. ✅ Concatena archivos múltiples (si hay varios)
 3. ✅ Sincroniza con audio (detecta palmada)
-4. ✅ Carga homografía del proyecto
+4. ✅ **Configura homografía** (te pide marcar 6 puntos - CADA CAMPO ES DIFERENTE)
 5. ✅ Genera panorama uniendo ambas cámaras
 6. ✅ Detecta el balón en cada frame
 7. ✅ Crea video TÁCTICO (campo completo)
@@ -108,11 +109,12 @@ Google Drive (local)/
 ### "No se encontraron videos"
 → Verifica que los videos estén en `~/Desktop/raw_video_left` y `raw_video_right`
 
-### "Falta homografía"
-→ Ejecuta primero: `python3 scripts/configurar_homografia.py`
-
 ### Videos no se sincronizan bien
 → Asegúrate de dar palmada fuerte al inicio
+
+### Error al marcar puntos de homografía
+→ Marca los 6 puntos en el MISMO ORDEN en ambas imágenes
+→ Asegúrate de marcar puntos correspondientes (mismo lugar en el campo)
 
 ---
 
