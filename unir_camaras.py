@@ -180,7 +180,7 @@ def main():
     print(f"   Escala: {scale:.3f}")
 
     # Centro de rotación (primer punto de imagen derecha)
-    center = tuple(pts_r[0].astype(int))
+    center = (float(pts_r[0][0]), float(pts_r[0][1]))
 
     # Matriz de rotación + escala
     M = cv2.getRotationMatrix2D(center, np.degrees(angle_diff), scale)
